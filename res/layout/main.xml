@@ -3,16 +3,42 @@
   xmlns:android="http://schemas.android.com/apk/res/android"
   android:layout_width="fill_parent"
   android:layout_height="fill_parent"
-  android:orientation="horizontal" android:gravity="center">
+  android:gravity="center"
+  android:orientation="vertical">
 
-  <Button
-    android:id="@+id/stopbutton"
+  <LinearLayout
+    android:id="@+id/LinearLayout01"
     android:layout_width="wrap_content"
-    android:layout_height="wrap_content" android:drawableTop="@android:drawable/ic_media_pause" android:text="@string/stop"/>
-  
-  <Button
-    android:id="@+id/playbutton"
+    android:layout_height="wrap_content"
+    android:gravity="center"
+    android:orientation="horizontal">
+    <Button
+      android:id="@+id/stop_button"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:drawableTop="@android:drawable/ic_media_pause"
+      android:text="@string/stop" />
+    <Button
+      android:id="@+id/play_button"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:drawableTop="@android:drawable/ic_media_play"
+      android:text="@string/play" />
+  </LinearLayout>
+
+  <RadioGroup
+    android:id="@+id/audiotrackgroup"
     android:layout_width="wrap_content"
-    android:layout_height="wrap_content" android:drawableTop="@android:drawable/ic_media_play" android:text="@string/play"/>
-    
+    android:layout_height="wrap_content">
+    <RadioButton
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:id="@+id/java_button"
+      android:text="@string/java_button" android:checked="true"/>
+    <RadioButton
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:id="@+id/native_button"
+      android:text="@string/native_button" />
+  </RadioGroup>
 </LinearLayout>

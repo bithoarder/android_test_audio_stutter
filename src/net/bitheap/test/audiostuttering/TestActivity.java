@@ -13,23 +13,35 @@ import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
+import android.widget.RadioButton;
 
 public class TestActivity extends Activity 
 {
   private Thread m_thread;
   private WakeLock m_wakeLock;
   private int m_dummy;
+  private int m_mode;
+  
+  private static int MODE_NATIVE = 0;
+  private static int MODE_JAVA = 1;
+
+  static 
+  {
+    System.loadLibrary("test");
+  }
   
   @Override
   public void onCreate(Bundle savedInstanceState) 
   {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.main);
+    
+    m_mode = MODE_JAVA;
 
     PowerManager pm = (PowerManager)getSystemService(Context.POWER_SERVICE);
     m_wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AudioTrackTest");
     
-    ((Button)findViewById(R.id.playbutton)).setOnClickListener(new OnClickListener()
+    ((Button)findViewById(R.id.play_button)).setOnClickListener(new OnClickListener()
     {
       @Override
       public void onClick(View v)
@@ -38,7 +50,7 @@ public class TestActivity extends Activity
       }
     });
 
-    ((Button)findViewById(R.id.stopbutton)).setOnClickListener(new OnClickListener()
+    ((Button)findViewById(R.id.stop_button)).setOnClickListener(new OnClickListener()
     {
       @Override
       public void onClick(View v)
@@ -46,6 +58,31 @@ public class TestActivity extends Activity
         stop();
       }
     });
+
+    ((RadioButton)findViewById(R.id.native_button)).setOnClickListener(new OnClickListener()
+    {
+      @Override
+      public void onClick(View v)
+      {
+        boolean isplaying = m_thread != null; 
+        if(isplaying) stop();
+        m_mode = MODE_NATIVE;
+        if(isplaying) play();
+      }
+    });
+
+    ((RadioButton)findViewById(R.id.java_button)).setOnClickListener(new OnClickListener()
+    {
+      @Override
+      public void onClick(View v)
+      {
+        boolean isplaying = m_thread != null; 
+        if(isplaying) stop();
+        m_mode = MODE_JAVA;
+        if(isplaying) play();
+      }
+    });
+    
   }
   
   private void play()
@@ -58,46 +95,53 @@ public class TestActivity extends Activity
         {
           m_wakeLock.acquire();
           Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
-
-          int minBufferSize = AudioTrack.getMinBufferSize(44100, AudioFormat.ENCODING_PCM_16BIT, AudioFormat.CHANNEL_CONFIGURATION_MONO);
-          AudioTrack audio = new AudioTrack(AudioManager.STREAM_MUSIC, 44100, AudioFormat.CHANNEL_CONFIGURATION_MONO , AudioFormat.ENCODING_PCM_16BIT, minBufferSize*4, AudioTrack.MODE_STREAM);
-          audio.play();
           
-          // generate sinus tone
-          short[] audioBuffer = new short[1024];
-          for(int i=0; i<audioBuffer.length; i++)
-            audioBuffer[i] = (short)(Math.sin(i*Math.PI/audioBuffer.length*64)*32765.0f);
-
-          long sleepDuration = audioBuffer.length*1000000000l/44100/3;
-
-          // find out how many cyces to waste to spend around 1/3 of the total avilable time between AudioTrack writes
-          // to increase the change of getting at least one uninterrupted run, run the profile a few times:
-          int loopsPerBuffer = 0;
-          for(int j=0; j<10; j++)
+          if(m_mode == MODE_NATIVE)
           {
-            long profileStart = System.nanoTime();
-            for(int i=0; i<1000; i++)
-              m_dummy += i; // to prevent the compiler from removing the loop
-            long profileDuration = System.nanoTime()-profileStart;
-            if(loopsPerBuffer==0 || sleepDuration/profileDuration<loopsPerBuffer)
-              loopsPerBuffer = (int)(sleepDuration/profileDuration);
+            jniRun();
           }
-          Log.v("StutterTest", "loopsPerBuffer:"+loopsPerBuffer);
-          
-          while(!Thread.interrupted())
+          else
           {
-            // to simulate expensive audio processing, burn about 1/3 of the cycles between writes:
-            for(int j=0; j<loopsPerBuffer; j++)
+            int minBufferSize = AudioTrack.getMinBufferSize(44100, AudioFormat.ENCODING_PCM_16BIT, AudioFormat.CHANNEL_CONFIGURATION_MONO);
+            AudioTrack audio = new AudioTrack(AudioManager.STREAM_MUSIC, 44100, AudioFormat.CHANNEL_CONFIGURATION_MONO , AudioFormat.ENCODING_PCM_16BIT, minBufferSize*4, AudioTrack.MODE_STREAM);
+            audio.play();
+            
+            // generate sinus tone
+            short[] audioBuffer = new short[1024];
+            for(int i=0; i<audioBuffer.length; i++)
+              audioBuffer[i] = (short)(Math.sin(i*Math.PI/audioBuffer.length*64)*32765.0f);
+  
+            long sleepDuration = audioBuffer.length*1000000000l/44100/3;
+  
+            // find out how many cyces to waste to spend around 1/3 of the total avilable time between AudioTrack writes
+            // to increase the change of getting at least one uninterrupted run, run the profile a few times:
+            int loopsPerBuffer = 0;
+            for(int j=0; j<10; j++)
             {
+              long profileStart = System.nanoTime();
               for(int i=0; i<1000; i++)
-                m_dummy += i;
+                m_dummy += i; // to prevent the compiler from removing the loop
+              long profileDuration = System.nanoTime()-profileStart;
+              if(loopsPerBuffer==0 || sleepDuration/profileDuration<loopsPerBuffer)
+                loopsPerBuffer = (int)(sleepDuration/profileDuration);
             }
-
-            audio.write(audioBuffer, 0, audioBuffer.length);
+            Log.v("StutterTest", "loopsPerBuffer:"+loopsPerBuffer);
+            
+            while(!Thread.interrupted())
+            {
+              // to simulate expensive audio processing, burn about 1/3 of the cycles between writes:
+              for(int j=0; j<loopsPerBuffer; j++)
+              {
+                for(int i=0; i<1000; i++)
+                  m_dummy += i;
+              }
+  
+              audio.write(audioBuffer, 0, audioBuffer.length);
+            }
+            
+            audio.stop();
+            audio.release();
           }
-          
-          audio.stop();
-          audio.release();
           
           m_wakeLock.release();
         }
@@ -112,7 +156,14 @@ public class TestActivity extends Activity
     {
       try
       {
-        m_thread.interrupt();
+        if(m_mode == MODE_NATIVE)
+        {
+          jniStop();
+        }
+        else
+        {
+          m_thread.interrupt();
+        }
         m_thread.join();
         m_thread = null;
       }
@@ -122,4 +173,6 @@ public class TestActivity extends Activity
     }
   }
   
+  native private void jniRun();
+  native private void jniStop();
 }

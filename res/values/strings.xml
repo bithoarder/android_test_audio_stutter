@@ -4,4 +4,6 @@
     <string name="app_name">AudioTrack Stuttering Test</string>
 <string name="stop">Stop</string>
 <string name="play">Play</string>
+<string name="java_button">Use Java AudioTrack</string>
+<string name="native_button">Use C++ AudioTrack</string>
 </resources>
